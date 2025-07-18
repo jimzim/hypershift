@@ -69,6 +69,9 @@ const (
 	// CapabilityImageStream indicates if the cluster supports ImageStream
 	// image.openshift.io
 	CapabilityImageStream
+
+	// CapabilityITMS indicates if the cluster supports ImageTagMirrorSet CRDs
+	CapabilityITMS
 )
 
 // ManagementClusterCapabilities holds all information about optional capabilities of
@@ -211,6 +214,15 @@ func DetectManagementClusterCapabilities(client discovery.ServerResourcesInterfa
 	}
 	if hasImageStreamCap {
 		discoveredCapabilities[CapabilityImageStream] = struct{}{}
+	}
+
+	// check for ImageTagMirrorSet capability
+	hasITMSCap, err := isAPIResourceRegistered(client, configv1.GroupVersion, "imagetagmirrorsets")
+	if err != nil {
+		return nil, err
+	}
+	if hasITMSCap {
+		discoveredCapabilities[CapabilityITMS] = struct{}{}
 	}
 
 	return &ManagementClusterCapabilities{capabilities: discoveredCapabilities}, nil

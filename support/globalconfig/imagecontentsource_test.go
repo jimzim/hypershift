@@ -112,7 +112,7 @@ func TestGetAllImageRegistryMirrors(t *testing.T) {
 
 			client := fake.NewClientBuilder().WithScheme(testScheme).WithObjects(objs...).Build()
 
-			result, err := GetAllImageRegistryMirrors(ctx, client, tc.hasIDMSCapability, tc.hasICSPCapability)
+			result, err := GetAllImageRegistryMirrors(ctx, client, tc.hasIDMSCapability, tc.hasICSPCapability, false)
 			g.Expect(err).To(BeNil())
 			g.Expect(result).To(Equal(tc.expectedResult))
 		})

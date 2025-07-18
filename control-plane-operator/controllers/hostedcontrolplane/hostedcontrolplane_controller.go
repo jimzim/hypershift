@@ -2451,6 +2451,11 @@ func (r *HostedControlPlaneReconciler) reconcileCoreIgnitionConfig(ctx context.C
 	return nil
 }
 
+func (r *HostedControlPlaneReconciler) reconcileImagePolicyIgnitionConfig(ctx context.Context, hcp *hyperv1.HostedControlPlane) error {
+	// This function has been removed temporarily due to build issues
+	return nil
+}
+
 func (r *HostedControlPlaneReconciler) admitHCPManagedRoutes(ctx context.Context, hcp *hyperv1.HostedControlPlane, privateRouterHost, externalRouterHost string) error {
 	routeList := &routev1.RouteList{}
 	if err := r.List(ctx, routeList, client.InNamespace(hcp.Namespace)); err != nil {
