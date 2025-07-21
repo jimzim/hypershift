@@ -59,6 +59,10 @@ func ReconcileImageSourceMirrorsIgnitionConfigFromIDMS(cm *corev1.ConfigMap, own
 	return reconcileImageContentTypeIgnitionConfigMap(cm, imageDigestMirrorSet, ownerRef)
 }
 
+func ReconcileImageSourceMirrorsIgnitionConfigFromITMS(cm *corev1.ConfigMap, ownerRef config.OwnerRef, imageTagMirrorSet *configv1.ImageTagMirrorSet) error {
+	return reconcileImageContentTypeIgnitionConfigMap(cm, imageTagMirrorSet, ownerRef)
+}
+
 func workerSSHConfig(sshKey string) ([]byte, error) {
 	config := &igntypes.Config{}
 	config.Ignition.Version = ignitionVersion

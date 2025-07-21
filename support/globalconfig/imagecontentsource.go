@@ -85,7 +85,6 @@ func ReconcileImageDigestMirrors(idms *configv1.ImageDigestMirrorSet, hcp *hyper
 }
 
 // ReconcileImageDigestMirrorsFromSources reconciles the ImageDigestMirrorSources from the HCP spec into an ImageDigestMirrorSet
-/*
 func ReconcileImageDigestMirrorsFromSources(idms *configv1.ImageDigestMirrorSet, hcp *hyperv1.HostedControlPlane) error {
 	if idms.Labels == nil {
 		idms.Labels = map[string]string{}
@@ -115,7 +114,6 @@ func ReconcileImageDigestMirrorsFromSources(idms *configv1.ImageDigestMirrorSet,
 	}
 	return nil
 }
-*/
 
 // GetAllImageRegistryMirrors returns any image registry mirrors from any ImageDigestMirrorSet or ImageContentSourcePolicy
 // in an OpenShift management cluster (other management cluster types will not have these policies).
@@ -259,7 +257,6 @@ func ImageTagMirrorSetList() *configv1.ImageTagMirrorSetList {
 }
 
 // ReconcileImageTagMirrors reconciles the ImageTagMirrorSources from the HCP spec into an ImageTagMirrorSet
-/*
 func ReconcileImageTagMirrors(itms *configv1.ImageTagMirrorSet, hcp *hyperv1.HostedControlPlane) error {
 	if itms.Labels == nil {
 		itms.Labels = map[string]string{}
@@ -287,7 +284,6 @@ func ReconcileImageTagMirrors(itms *configv1.ImageTagMirrorSet, hcp *hyperv1.Hos
 	}
 	return nil
 }
-*/
 
 // RegistryProvider is an interface for release and metadata providers to enable the reconcilliation
 // of those providers
