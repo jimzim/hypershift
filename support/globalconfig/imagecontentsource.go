@@ -241,7 +241,7 @@ func ImageTagMirrorSet() *configv1.ImageTagMirrorSet {
 			APIVersion: configv1.GroupVersion.String(),
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "cluster",
+			Name: ClusterName,
 		},
 	}
 }
