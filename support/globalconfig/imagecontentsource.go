@@ -263,7 +263,9 @@ func ReconcileImageTagMirrors(itms *configv1.ImageTagMirrorSet, hcp *hyperv1.Hos
 	}
 
 	itms.Labels["machineconfiguration.openshift.io/role"] = "worker"
-	itms.Spec.ImageTagMirrors = []configv1.ImageTagMirrors{}
+	if itms.Spec.ImageTagMirrors == nil {
+		itms.Spec.ImageTagMirrors = []configv1.ImageTagMirrors{}
+	}
 
 	for _, source := range hcp.Spec.ImageTagMirrorSources {
 		var mirrors []configv1.ImageMirror
