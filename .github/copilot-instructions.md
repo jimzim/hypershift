@@ -29,6 +29,7 @@ HyperShift is a middleware for hosting OpenShift control planes at scale that so
   - EBS volumes and storage management
   - Load balancers (NLB) and VPC endpoints
   - KMS for encryption key management
+  - AWS Tags
 - AWS shared VPC architecture and cross-account configurations
 - Private cluster deployments with bastion hosts
 - Multi-AZ deployments and high availability patterns
