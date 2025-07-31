@@ -37,6 +37,9 @@ func NewCreateCommands() *cobra.Command {
 	cmd.AddCommand(powervs.NewCreateCommand(opts))
 	cmd.AddCommand(openstack.NewCreateCommand(opts))
 
+	// cmd.Flags().StringVar(&opts.ImageTagMirrorSources, "image-tag-mirror-sources", "", "Path to file containing image tag mirror sources in YAML format")
+	// cmd.Flags().StringVar(&opts.ImageDigestMirrorSources, "image-digest-mirror-sources", "", "Path to file containing image digest mirror sources in YAML format")
+
 	return cmd
 }
 

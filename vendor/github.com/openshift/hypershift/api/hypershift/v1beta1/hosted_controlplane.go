@@ -192,6 +192,16 @@ type HostedControlPlaneSpec struct {
 	// +kubebuilder:validation:MaxItems=255
 	ImageContentSources []ImageContentSource `json:"imageContentSources,omitempty"`
 
+	// imageTagMirrorSources lists image tag mirror sources for the control plane
+	// +optional
+	// +kubebuilder:validation:MaxItems=255
+	ImageTagMirrorSources []ImageTagMirrorSource `json:"imageTagMirrorSources,omitempty"`
+
+	// imageDigestMirrorSources lists image digest mirror sources for the control plane
+	// +optional
+	// +kubebuilder:validation:MaxItems=255
+	ImageDigestMirrorSources []ImageDigestMirrorSource `json:"imageDigestMirrorSources,omitempty"`
+
 	// additionalTrustBundle references a ConfigMap containing a PEM-encoded X.509 certificate bundle
 	// +optional
 	AdditionalTrustBundle *corev1.LocalObjectReference `json:"additionalTrustBundle,omitempty"`

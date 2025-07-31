@@ -84,6 +84,37 @@ func ReconcileImageDigestMirrors(idms *configv1.ImageDigestMirrorSet, hcp *hyper
 	return nil
 }
 
+// ReconcileImageDigestMirrorsFromSources reconciles the ImageDigestMirrorSources from the HCP spec into an ImageDigestMirrorSet
+func ReconcileImageDigestMirrorsFromSources(idms *configv1.ImageDigestMirrorSet, hcp *hyperv1.HostedControlPlane) error {
+	if idms.Labels == nil {
+		idms.Labels = map[string]string{}
+	}
+
+	idms.Labels["machineconfiguration.openshift.io/role"] = "worker"
+	if idms.Spec.ImageDigestMirrors == nil {
+		idms.Spec.ImageDigestMirrors = []configv1.ImageDigestMirrors{}
+	}
+
+	for _, source := range hcp.Spec.ImageDigestMirrorSources {
+		var mirrors []configv1.ImageMirror
+		for _, mirror := range source.Mirrors {
+			mirrors = append(mirrors, configv1.ImageMirror(mirror))
+		}
+
+		digestMirror := configv1.ImageDigestMirrors{
+			Source:  source.Source,
+			Mirrors: mirrors,
+		}
+
+		if source.MirrorSourcePolicy != nil {
+			digestMirror.MirrorSourcePolicy = configv1.MirrorSourcePolicy(*source.MirrorSourcePolicy)
+		}
+
+		idms.Spec.ImageDigestMirrors = append(idms.Spec.ImageDigestMirrors, digestMirror)
+	}
+	return nil
+}
+
 // GetAllImageRegistryMirrors returns any image registry mirrors from any ImageDigestMirrorSet or ImageContentSourcePolicy
 // in an OpenShift management cluster (other management cluster types will not have these policies).
 // ImageContentSourcePolicy will be deprecated and removed in 4.17 according to the following Jira ticket and PR
@@ -91,7 +122,7 @@ func ReconcileImageDigestMirrors(idms *configv1.ImageDigestMirrorSet, hcp *hyper
 //
 //		https://issues.redhat.com/browse/OCPNODE-1258
 //	    https://github.com/openshift/hypershift/pull/1776
-func GetAllImageRegistryMirrors(ctx context.Context, client crclient.Client, mgmtClusterHasIDMSCapability, mgmtClusterHasICSPCapability bool) (map[string][]string, error) {
+func GetAllImageRegistryMirrors(ctx context.Context, client crclient.Client, mgmtClusterHasIDMSCapability, mgmtClusterHasICSPCapability, mgmtClusterHasITMSCapability bool) (map[string][]string, error) {
 	var mgmtClusterRegistryOverrides = make(map[string][]string)
 
 	if mgmtClusterHasIDMSCapability {
@@ -99,8 +130,17 @@ func GetAllImageRegistryMirrors(ctx context.Context, client crclient.Client, mgm
 		if err != nil {
 			return nil, err
 		}
-
 		for key, values := range idms {
+			mgmtClusterRegistryOverrides[key] = append(mgmtClusterRegistryOverrides[key], values...)
+		}
+	}
+
+	if mgmtClusterHasITMSCapability {
+		itms, err := getImageTagMirrorSets(ctx, client)
+		if err != nil {
+			return nil, err
+		}
+		for key, values := range itms {
 			mgmtClusterRegistryOverrides[key] = append(mgmtClusterRegistryOverrides[key], values...)
 		}
 	}
@@ -110,7 +150,6 @@ func GetAllImageRegistryMirrors(ctx context.Context, client crclient.Client, mgm
 		if err != nil {
 			return nil, err
 		}
-
 		for key, values := range icsp {
 			mgmtClusterRegistryOverrides[key] = append(mgmtClusterRegistryOverrides[key], values...)
 		}
@@ -171,6 +210,83 @@ func getImageContentSourcePolicies(ctx context.Context, client crclient.Client) 
 	return icspRegistryOverrides, nil
 }
 
+// getImageTagMirrorSets retrieves any ITMS CRs from an OpenShift management cluster
+func getImageTagMirrorSets(ctx context.Context, client crclient.Client) (map[string][]string, error) {
+	var itmsRegistryOverrides = make(map[string][]string)
+	var imageTagMirrorSets = ImageTagMirrorSetList()
+
+	err := client.List(ctx, imageTagMirrorSets)
+	if err != nil {
+		return nil, err
+	}
+
+	// For each image tag mirror set in the management cluster, map the source with each of its mirrors
+	for _, item := range imageTagMirrorSets.Items {
+		for _, imageTagMirror := range item.Spec.ImageTagMirrors {
+			source := imageTagMirror.Source
+			for n := range imageTagMirror.Mirrors {
+				itmsRegistryOverrides[source] = append(itmsRegistryOverrides[source], string(imageTagMirror.Mirrors[n]))
+			}
+		}
+	}
+
+	return itmsRegistryOverrides, nil
+}
+
+// ImageTagMirrorSet returns an initialized ImageTagMirrorSet pointer
+func ImageTagMirrorSet() *configv1.ImageTagMirrorSet {
+	return &configv1.ImageTagMirrorSet{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "ImageTagMirrorSet",
+			APIVersion: configv1.GroupVersion.String(),
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: ClusterName,
+		},
+	}
+}
+
+// ImageTagMirrorSetList returns an initialized ImageTagMirrorSetList pointer
+func ImageTagMirrorSetList() *configv1.ImageTagMirrorSetList {
+	return &configv1.ImageTagMirrorSetList{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "ImageTagMirrorSetList",
+			APIVersion: configv1.GroupVersion.String(),
+		},
+	}
+}
+
+// ReconcileImageTagMirrors reconciles the ImageTagMirrorSources from the HCP spec into an ImageTagMirrorSet
+func ReconcileImageTagMirrors(itms *configv1.ImageTagMirrorSet, hcp *hyperv1.HostedControlPlane) error {
+	if itms.Labels == nil {
+		itms.Labels = map[string]string{}
+	}
+
+	itms.Labels["machineconfiguration.openshift.io/role"] = "worker"
+	if itms.Spec.ImageTagMirrors == nil {
+		itms.Spec.ImageTagMirrors = []configv1.ImageTagMirrors{}
+	}
+
+	for _, source := range hcp.Spec.ImageTagMirrorSources {
+		var mirrors []configv1.ImageMirror
+		for _, mirror := range source.Mirrors {
+			mirrors = append(mirrors, configv1.ImageMirror(mirror))
+		}
+
+		tagMirror := configv1.ImageTagMirrors{
+			Source:  source.Source,
+			Mirrors: mirrors,
+		}
+
+		if source.MirrorSourcePolicy != nil {
+			tagMirror.MirrorSourcePolicy = configv1.MirrorSourcePolicy(*source.MirrorSourcePolicy)
+		}
+
+		itms.Spec.ImageTagMirrors = append(itms.Spec.ImageTagMirrors, tagMirror)
+	}
+	return nil
+}
+
 // RegistryProvider is an interface for release and metadata providers to enable the reconcilliation
 // of those providers
 type RegistryProvider interface {
@@ -194,8 +310,11 @@ func NewCommonRegistryProvider(ctx context.Context, capChecker capabilities.Capa
 		err                  error
 	)
 
-	if capChecker.Has(capabilities.CapabilityICSP) || capChecker.Has(capabilities.CapabilityIDMS) {
-		imageRegistryMirrors, err = GetAllImageRegistryMirrors(ctx, client, capChecker.Has(capabilities.CapabilityIDMS), capChecker.Has(capabilities.CapabilityICSP))
+	if capChecker.Has(capabilities.CapabilityICSP) || capChecker.Has(capabilities.CapabilityIDMS) || capChecker.Has(capabilities.CapabilityITMS) {
+		imageRegistryMirrors, err = GetAllImageRegistryMirrors(ctx, client,
+			capChecker.Has(capabilities.CapabilityIDMS),
+			capChecker.Has(capabilities.CapabilityICSP),
+			capChecker.Has(capabilities.CapabilityITMS))
 		if err != nil {
 			return CommonRegistryProvider{}, fmt.Errorf("failed to reconcile over image registry mirrors: %w", err)
 		}
@@ -243,8 +362,8 @@ func (rp CommonRegistryProvider) Reconcile(ctx context.Context, client crclient.
 		err                  error
 	)
 
-	if rp.capChecker.Has(capabilities.CapabilityICSP) || rp.capChecker.Has(capabilities.CapabilityIDMS) {
-		imageRegistryMirrors, err = GetAllImageRegistryMirrors(ctx, client, rp.capChecker.Has(capabilities.CapabilityIDMS), rp.capChecker.Has(capabilities.CapabilityICSP))
+	if rp.capChecker.Has(capabilities.CapabilityICSP) || rp.capChecker.Has(capabilities.CapabilityIDMS) || rp.capChecker.Has(capabilities.CapabilityITMS) {
+		imageRegistryMirrors, err = GetAllImageRegistryMirrors(ctx, client, rp.capChecker.Has(capabilities.CapabilityIDMS), rp.capChecker.Has(capabilities.CapabilityICSP), rp.capChecker.Has(capabilities.CapabilityITMS))
 		if err != nil {
 			return fmt.Errorf("failed to reconcile over image registry mirrors: %w", err)
 		}

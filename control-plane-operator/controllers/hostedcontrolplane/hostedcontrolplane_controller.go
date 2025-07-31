@@ -2341,6 +2341,12 @@ func (r *HostedControlPlaneReconciler) reconcileIgnitionServerConfigs(ctx contex
 		return fmt.Errorf("failed to reconcile core ignition config: %w", err)
 	}
 
+	// Reconcile image policy ignition config
+	r.Log.Info("Reconciling image policy ignition config")
+	if err := r.reconcileImagePolicyIgnitionConfig(ctx, hcp, createOrUpdate); err != nil {
+		return fmt.Errorf("failed to reconcile image policy ignition config: %w", err)
+	}
+
 	// Reconcile machine config server config
 	r.Log.Info("Reconciling machine config server config")
 	if err := r.reconcileMachineConfigServerConfig(ctx, hcp, createOrUpdate); err != nil {
@@ -2458,6 +2464,88 @@ func (r *HostedControlPlaneReconciler) reconcileCoreIgnitionConfig(ctx context.C
 		return ignition.ReconcileImageSourceMirrorsIgnitionConfigFromIDMS(imageContentPolicyIgnitionConfig, p.OwnerRef, imageDigestMirrorSet)
 	}); err != nil {
 		return fmt.Errorf("failed to reconcile image content source policy ignition config: %w", err)
+	}
+
+	return nil
+}
+
+func (r *HostedControlPlaneReconciler) reconcileImagePolicyIgnitionConfig(ctx context.Context, hcp *hyperv1.HostedControlPlane, createOrUpdate upsert.CreateOrUpdateFN) error {
+	sshKey := ""
+	if len(hcp.Spec.SSHKey.Name) > 0 {
+		var sshKeySecret corev1.Secret
+		err := r.Client.Get(ctx, client.ObjectKey{Namespace: hcp.Namespace, Name: hcp.Spec.SSHKey.Name}, &sshKeySecret)
+		if err != nil {
+			return fmt.Errorf("failed to get SSH key secret %s: %w", hcp.Spec.SSHKey.Name, err)
+		}
+		data, hasSSHKeyData := sshKeySecret.Data["id_rsa.pub"]
+		if !hasSSHKeyData {
+			return fmt.Errorf("SSH key secret secret %s is missing the id_rsa.pub key", hcp.Spec.SSHKey.Name)
+		}
+		sshKey = string(data)
+	}
+
+	p := ignition.NewIgnitionConfigParams(hcp, sshKey)
+
+	// Check if we have any image mirror policies
+	hasImageTagMirrorPolicies := len(hcp.Spec.ImageTagMirrorSources) > 0
+	hasImageDigestMirrorPolicies := len(hcp.Spec.ImageDigestMirrorSources) > 0
+	hasLegacyImageContentSources := len(hcp.Spec.ImageContentSources) > 0
+
+	p.HasImageMirrorPolicies = hasImageTagMirrorPolicies || hasImageDigestMirrorPolicies || hasLegacyImageContentSources
+
+	// Get the config map for image policies
+	imageContentPolicyIgnitionConfig := manifests.ImageContentPolicyIgnitionConfig(hcp.GetNamespace())
+
+	// If no image mirror policies, clean up and return
+	if !p.HasImageMirrorPolicies {
+		_, err := util.DeleteIfNeeded(ctx, r.Client, imageContentPolicyIgnitionConfig)
+		if err != nil {
+			return fmt.Errorf("failed to delete image content source policy configuration configmap: %w", err)
+		}
+		return nil
+	}
+
+	// Handle ImageTagMirrorSet for OpenShift 4.13+
+	if hasImageTagMirrorPolicies {
+		r.Log.Info("Reconciling ImageTagMirrorSet")
+		imageTagMirrorSet := globalconfig.ImageTagMirrorSet()
+		if err := globalconfig.ReconcileImageTagMirrors(imageTagMirrorSet, hcp); err != nil {
+			return fmt.Errorf("failed to reconcile image tag mirror policy: %w", err)
+		}
+
+		// Apply the ImageTagMirrorSet to ignition config
+		if _, err := createOrUpdate(ctx, r, imageContentPolicyIgnitionConfig, func() error {
+			return ignition.ReconcileImageSourceMirrorsIgnitionConfigFromITMS(imageContentPolicyIgnitionConfig, p.OwnerRef, imageTagMirrorSet)
+		}); err != nil {
+			return fmt.Errorf("failed to reconcile image tag mirror set config: %w", err)
+		}
+	}
+
+	// Handle ImageDigestMirrorSet for both new IDMS sources and legacy ImageContentSources
+	if hasImageDigestMirrorPolicies || hasLegacyImageContentSources {
+		r.Log.Info("Reconciling ImageDigestMirrorSet")
+		imageDigestMirrorSet := globalconfig.ImageDigestMirrorSet()
+
+		// Handle new ImageDigestMirrorSources
+		if hasImageDigestMirrorPolicies {
+			if err := globalconfig.ReconcileImageDigestMirrorsFromSources(imageDigestMirrorSet, hcp); err != nil {
+				return fmt.Errorf("failed to reconcile image digest mirror policy from sources: %w", err)
+			}
+		}
+
+		// Handle legacy ImageContentSources (for backward compatibility)
+		if hasLegacyImageContentSources {
+			if err := globalconfig.ReconcileImageDigestMirrors(imageDigestMirrorSet, hcp); err != nil {
+				return fmt.Errorf("failed to reconcile image digest mirror policy from legacy sources: %w", err)
+			}
+		}
+
+		// Apply the ImageDigestMirrorSet to ignition config
+		if _, err := createOrUpdate(ctx, r, imageContentPolicyIgnitionConfig, func() error {
+			return ignition.ReconcileImageSourceMirrorsIgnitionConfigFromIDMS(imageContentPolicyIgnitionConfig, p.OwnerRef, imageDigestMirrorSet)
+		}); err != nil {
+			return fmt.Errorf("failed to reconcile image digest mirror set config: %w", err)
+		}
 	}
 
 	return nil
